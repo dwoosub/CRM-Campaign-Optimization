@@ -17,7 +17,7 @@
 
 ### Step 1: Feature Engineering (SQL)
 Aggregated raw gameplay logs in Snowflake to create user-level features:
-- `AVG_WEEKLY_THEO`
+- `AVG_WEEKLY_THEO_WIN`
 - `AVG_WEEKLY_DAYS_PLAYED`
 
 ---
