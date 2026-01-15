@@ -1,0 +1,61 @@
+SELECT 
+    'Active Players (JDB_ACTIVE)' AS COHORT_TYPE,
+    COUNT(DISTINCT GGPASS_ID) AS NUM_TARGETED_PLAYERS,
+    
+    -- 1. RATES & COUNTS
+    0.30 AS REDEMPTION_RATE,
+    ROUND(COUNT(DISTINCT GGPASS_ID) * 0.30, 0) AS RESPONDING_USERS,
+    
+    -- 2. ADT METRICS
+    ROUND(SUM(AVG_WEEKLY_THEO_WIN) / NULLIF(SUM(AVG_WEEKLY_DAYS_PLAYED), 0), 2) AS ADT_PER_PLAYER,
+    ROUND(AVG(AVG_WEEKLY_DAYS_PLAYED), 2) AS AVG_DAYS_PLAYED_PER_WEEK,
+    ROUND(AVG(AVG_WEEKLY_THEO_WIN), 2) AS AVG_TOTAL_THEO_PER_PLAYER_WEEK,
+    
+    -- Total Theo Expected
+    ROUND(
+        AVG(AVG_WEEKLY_THEO_WIN) * (COUNT(DISTINCT GGPASS_ID) * 0.30)
+    , 0) AS TOTAL_THEO_EXPECTED,
+
+    -- 3. OFFER METRICS
+    ROUND(AVG(CB_AMOUNT), 2) AS AVG_OFFER_AMOUNT,
+    
+    -- Cash Conversion Logic (50% Success Rate * 110% Redemption Value)
+    -- Multiplier = 0.50 * 1.10 = 0.55
+    0.55 AS CASH_CONVERSION_FACTOR, 
+    
+    -- Lift assumption (+1 Day)
+    1 AS INCREMENTAL_LIFT_DAYS,
+
+    -- 4. INCREMENTAL LIFT ANALYSIS
+    ROUND(COUNT(DISTINCT GGPASS_ID) * 0.30 * 1, 0) AS NUM_PLAYERS_INCREASING_DAYS,
+    ROUND((COUNT(DISTINCT GGPASS_ID) * 0.30) * 1, 0) AS LIFT_IN_DAYS_PLAYED,
+    
+    -- Incremental Lift in Total Theo
+    ROUND(
+        ((COUNT(DISTINCT GGPASS_ID) * 0.30) * 1) * (SUM(AVG_WEEKLY_THEO_WIN) / NULLIF(SUM(AVG_WEEKLY_DAYS_PLAYED), 0))
+    , 0) AS INCREMENTAL_LIFT_TOTAL_THEO,
+    
+    -- Redeemed Offer Amount (Cost)
+    -- Formula: Responders(30%) * Avg Offer * Success Rate(50%) * Winner Premium(1.10)
+    -- Simplified Multiplier: 0.30 * 0.55
+    ROUND(
+        (COUNT(DISTINCT GGPASS_ID) * 0.30) * AVG(CB_AMOUNT) * 0.55
+    , 0) AS REDEEMED_OFFER_AMOUNT_COST,
+    
+    -- Lift Net Theo
+    ROUND(
+        (((COUNT(DISTINCT GGPASS_ID) * 0.30) * 1) * (SUM(AVG_WEEKLY_THEO_WIN) / NULLIF(SUM(AVG_WEEKLY_DAYS_PLAYED), 0))) - 
+        ((COUNT(DISTINCT GGPASS_ID) * 0.30) * AVG(CB_AMOUNT) * 0.55)
+    , 0) AS LIFT_NET_THEO,
+    
+    -- ROI
+    ROUND(
+        (
+            (((COUNT(DISTINCT GGPASS_ID) * 0.30) * 1) * (SUM(AVG_WEEKLY_THEO_WIN) / NULLIF(SUM(AVG_WEEKLY_DAYS_PLAYED), 0))) - 
+            ((COUNT(DISTINCT GGPASS_ID) * 0.30) * AVG(CB_AMOUNT) * 0.55)
+        )
+        / 
+        NULLIF(((COUNT(DISTINCT GGPASS_ID) * 0.30) * AVG(CB_AMOUNT) * 0.55), 0)
+    , 2) AS ROI_PCT
+
+FROM DW_CP.PUBLIC.JDB_ACTIVE_USERS;
