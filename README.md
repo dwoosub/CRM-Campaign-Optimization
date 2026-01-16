@@ -4,10 +4,6 @@
 > **Designed and executed a targeted CRM campaign strategy for active JDB(game provider name) players. By replacing static offer rules with a machine learning approach (K-Medians Clustering), I identified four distinct player personas. The resulting model projected a 576% ROI and a $19K lift in Theoretical Win, optimizing marketing spend by dynamically aligning offer amounts to player value.**
 ---
 
-### 🔒 Data Privacy Note
-The datasets provided in this repository (`data/`) have been **anonymized** to protect player privacy. All `GGPASS_ID`, `NICKNAME`, and `CID` values were replaced with synthetic UUIDs or generic labels prior to upload. The behavioral patterns and logic remain authentic to the analysis.
----
-
 ## 2. The Problem (Situation)
 
 - **Context:** The CRM team needed to engage active users without overspending on “spray and pray” bonuses.
@@ -168,3 +164,10 @@ FROM DW_CP.PUBLIC.JDB_ACTIVE_USERS;
 - Python (Pandas, NumPy)
 - Unsupervised Machine Learning (K-Medians)
 - CRM & Marketing Analytics
+
+---
+
+<br>
+<small>
+<b>🔒 Data Privacy Note:</b> The datasets provided in this repository (`data/`) have been anonymized to protect player privacy. All `GGPASS_ID`, `NICKNAME`, and `CID` values were replaced with synthetic UUIDs or generic labels prior to upload. The behavioral patterns and logic remain authentic to the analysis.
+</small>
