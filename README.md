@@ -169,5 +169,5 @@ FROM DW_CP.PUBLIC.JDB_ACTIVE_USERS;
 
 <br>
 <small>
-<b>🔒 Data Privacy Note:</b> The datasets provided in this repository (`data/`) have been anonymized to protect player privacy. All `GGPASS_ID`, `NICKNAME`, and `CID` values were replaced with synthetic UUIDs or generic labels prior to upload. The behavioral patterns and logic remain authentic to the analysis.
+<b>🔒 Data Privacy & Sampling Note:</b> The datasets provided in this repository (`data/`) have been anonymized to protect player privacy, and reduced to a sample size (~20 records) for demonstration purposes. The analysis results in this README reflect the full production dataset (N=751).
 </small>
