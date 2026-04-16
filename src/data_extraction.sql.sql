@@ -1,47 +1,92 @@
-WITH CONSENTED_PLAYERS AS (
-    SELECT DISTINCT p.GPID
-    FROM DW_WAREHOUSE.PUBLIC.GGCORE_DISTINCT_PLAYER AS P
+WITH LATEST_CONSENT AS (
+    SELECT *
+    FROM (
+        SELECT 
+            c.*,
+            ROW_NUMBER() OVER (
+                PARTITION BY c.player_id, c.product_type, c.channel_type
+                ORDER BY c.MARKETING_CONSENT_UPDATED_AT DESC
+            ) AS rn
+        FROM DW_WAREHOUSE.PUBLIC.GGCORE_PLAYER_MARKETING_AGREEMENT c
+        WHERE 
+            c.CHANNEL_TYPE = 'Email'
+            AND c.PRODUCT_TYPE = 'Casino'
+    )
+    WHERE rn = 1
+)
+,LATEST_GAME_LIMIT AS (
+    SELECT *
+    FROM DW_WAREHOUSE.PUBLIC.GGCORE_PLAYER_RESPONSIBLE_GAMING_GAME_LIMIT
+    QUALIFY ROW_NUMBER() OVER (
+        PARTITION BY GP_ID
+        ORDER BY UPDATEDAT DESC
+    ) = 1
+)
+,LATEST_ACCOUNT AS (
+    SELECT *
+    FROM DW_WAREHOUSE.PUBLIC.GP_ACCOUNT
+    QUALIFY ROW_NUMBER() OVER (
+        PARTITION BY GP_ID
+        ORDER BY UPDATED_AT DESC
+    ) = 1
+)
+,LATEST_ACCOUNT_STATUS AS (
+    SELECT *
+    FROM DW_WAREHOUSE.PUBLIC.GP_ACCOUNT_STATUS
+    QUALIFY ROW_NUMBER() OVER (
+        PARTITION BY GP_ID
+        ORDER BY UPDATED_AT DESC
+    ) = 1
+)
+,LATEST_WALLET AS (
+    SELECT *
+    FROM DW_WAREHOUSE.PUBLIC.GGCORE_WALLET
+    QUALIFY ROW_NUMBER() OVER (
+        PARTITION BY ACCOUNT_ID
+        ORDER BY UPDATED_AT DESC
+    ) = 1
+)
+
+
+,CONSENTED_PLAYERS AS (
+    SELECT DISTINCT p.gpid
+    FROM DW_WAREHOUSE.PUBLIC.GGCORE_DISTINCT_PLAYER AS p
     
-    -- Join marketing consent
-    JOIN DW_WAREHOUSE.PUBLIC.GGCORE_PLAYER_MARKETING_AGREEMENT AS C 
-        ON p.id = c.player_id
+    JOIN LATEST_CONSENT AS c
+        ON p.id = c.player_id AND P.BRANDID = C.BRAND_ID
+    
+    LEFT JOIN LATEST_GAME_LIMIT l
+        ON l.GP_ID = p.gpid AND L.BRANDID = P.BRANDID
         
-    WHERE 
+    LEFT JOIN LATEST_ACCOUNT a
+        ON a.GP_ID = p.gpid AND A.BRAND_ID = P.BRANDID
+        
+    LEFT JOIN LATEST_ACCOUNT_STATUS s
+        ON s.GP_ID = p.gpid AND S.BRAND_ID = P.BRANDID
+        
+    LEFT JOIN LATEST_WALLET w
+        ON w.ACCOUNT_ID = p.ACCOUNTID AND W.BRAND_ID = P.BRANDID
+    
+    WHERE
         c.CHANNEL_TYPE = 'Email'
         AND c.PRODUCT_TYPE = 'Casino'
         AND c.IS_MARKETING_CONSENT = TRUE
-    
-        -- Exclude active game limits
-        AND NOT EXISTS (
-            SELECT 1
-            FROM DW_WAREHOUSE.PUBLIC.GGCORE_PLAYER_RESPONSIBLE_GAMING_GAME_LIMIT AS L
-            WHERE L.GP_ID = P.GPID
-            AND (L.CASINO = TRUE OR L.SLOT = TRUE OR L.LIVEDEALER = TRUE)
-        )
-        -- Exclude self-excluded / promotion disabled
-        AND NOT EXISTS (
-            SELECT 1
-            FROM DW_WAREHOUSE.PUBLIC.GP_ACCOUNT AS A
-            WHERE A.GP_ID = P.GPID
-            AND (A.IS_SELF_EXCLUDED = TRUE OR A.IS_PROMOTION_ENABLED = FALSE)
-        )
-        -- Exclude non-active status
-        AND NOT EXISTS (
-            SELECT 1
-            FROM DW_WAREHOUSE.PUBLIC.GP_ACCOUNT_STATUS AS S
-            WHERE S.GP_ID = P.GPID
-            AND S.STATUS != 'ACTIVE'
-        )
-        -- Wallet must be active
-        AND EXISTS (
-            SELECT 1
-            FROM DW_WAREHOUSE.PUBLIC.GGCORE_WALLET AS W
-            WHERE W.ACCOUNT_ID = P.ACCOUNTID 
-            AND W.IS_ACTIVE = TRUE
-        )
-),
+        
+        AND COALESCE(l.CASINO, FALSE) = FALSE
+        AND COALESCE(l.SLOT, FALSE) = FALSE
+        AND COALESCE(l.LIVEDEALER, FALSE) = FALSE
+        
+        AND COALESCE(a.IS_SELF_EXCLUDED, FALSE) = FALSE
+        AND COALESCE(a.IS_PROMOTION_ENABLED, TRUE) = TRUE
+        
+        AND s.STATUS = 'ACTIVE'
+        
+        AND w.IS_ACTIVE = TRUE
+)
 
-GAME_RTP AS (
+
+
+,GAME_RTP AS (
     SELECT GAME_CODE, GAME_RTP
     FROM (
         SELECT 
@@ -51,10 +96,10 @@ GAME_RTP AS (
         FROM DW_WAREHOUSE.PUBLIC.CP_STATS_PERIODIC_DAILY
     )
     WHERE rn = 1
-),
+)
 
--- Top Category is now calculated on the FULL window (2024-01-01 to Present)
-top_category AS (
+-- Top Category is now calculated on the FULL window (2025-01-01 to Present)
+,top_category AS (
     SELECT *
     FROM (
         SELECT 
@@ -63,26 +108,26 @@ top_category AS (
             SUM(BET) AS total_bet,
             ROW_NUMBER() OVER (PARTITION BY GP_ID ORDER BY SUM(BET) DESC) AS rn
         FROM DW_WAREHOUSE.PUBLIC.GP_STATISTICS_GAME_CASINO
-        WHERE AGGREGATED_AT >= '2024-01-01' -- Changed from BETWEEN to >=
+        WHERE AGGREGATED_AT >= '2025-01-01' 
         AND SITE_ID IN ('GGPUKE', 'EVPUKE', 'Natural8', 'GGPOK', 'GGPJP', 'GGPUA', 'GGPCOM', 'GGPUK', 'GGPEU', 'GGPFI', 'GGPHU', 'GGPPL')
         GROUP BY GP_ID, CATEGORY_ID
     ) ranked
     WHERE rn = 1
-),
+)
 
--- Single GPID check on the FULL window
-SINGLE_GPID_USERS AS (
+-- Single GPID (user id) check on the FULL window
+,SINGLE_GPID_USERS AS (
     SELECT 
         NICKNAME
     FROM DW_WAREHOUSE.PUBLIC.GP_STATISTICS_GAME_CASINO
-    WHERE AGGREGATED_AT >= '2024-01-01' 
+    WHERE AGGREGATED_AT >= '2025-01-01' 
     GROUP BY 
         NICKNAME
     HAVING 
         COUNT(DISTINCT GP_ID) = 1 
-),
+)
 
-LATEST_INFO AS (
+,LATEST_INFO AS (
   SELECT
     GGPASS_ID,
     GP_ID,
@@ -99,7 +144,7 @@ LATEST_INFO AS (
       AGGREGATED_AT,
       ROW_NUMBER() OVER (PARTITION BY GP_ID ORDER BY AGGREGATED_AT DESC) AS rn
     FROM DW_WAREHOUSE.PUBLIC.GP_STATISTICS_GAME_CASINO
-    WHERE AGGREGATED_AT >= '2024-01-01'
+    WHERE AGGREGATED_AT >= '2025-01-01'
   ) latest
   WHERE rn = 1
 )
@@ -129,8 +174,6 @@ LEFT JOIN TOP_CATEGORY AS TC ON TC.GP_ID = GC.GP_ID
 LEFT JOIN LATEST_INFO AS LN ON LN.GP_ID = GC.GP_ID
     
 WHERE 
-    -- 1. METRICS TIMEFRAME:
-    -- We want all data from DEC 1st 2025 onwards 
     GC.AGGREGATED_AT >= '2025-12-01' 
     
     AND gc.site_id IN ('GGPUKE', 'EVPUKE', 'Natural8', 'GGPOK', 'GGPJP', 'GGPUA', 'GGPCOM', 'GGPUK', 'GGPEU', 'GGPFI', 'GGPHU', 'GGPPL')
